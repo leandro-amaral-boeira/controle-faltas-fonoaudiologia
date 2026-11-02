@@ -1,0 +1,1080 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal da Saúde - Fonoaudiologia | Controle de Absenteísmo</title>
+    
+    <!-- Firebase SDKs (v10 Compat) - Carregados no head -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#075985',
+                            800: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .active-tab {
+            border-bottom: 3px solid #0284c7;
+            color: #0284c7;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-brand-600 flex items-center justify-center text-white shadow-md shadow-brand-500/20">
+                    <i class="fa-solid fa-notes-medical text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold text-slate-900 leading-tight">Portal da Saúde</h1>
+                    <p class="text-xs font-medium text-brand-600">Controle Estatístico de Absenteísmo do Núcleo de Fonoaudiologia</p>
+                </div>
+            </div>
+            <!-- Status Conexão Nuvem -->
+            <div class="flex items-center space-x-2 bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full text-xs font-medium border border-emerald-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>Nuvem Ativa</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Navigation Tabs -->
+    <nav class="bg-white border-b border-slate-200">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex space-x-8 overflow-x-auto">
+            <button onclick="switchTab('registro')" id="tab-registro" class="active-tab py-4 px-1 text-sm font-medium whitespace-nowrap flex items-center space-x-2 hover:text-brand-600 transition">
+                <i class="fa-solid fa-pen-to-square"></i>
+                <span>Registrar Falta</span>
+            </button>
+            <button onclick="switchTab('dashboard')" id="tab-dashboard" class="py-4 px-1 text-sm font-medium whitespace-nowrap text-slate-500 hover:text-brand-600 transition flex items-center space-x-2">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Painel Estatístico (Gerência)</span>
+            </button>
+            <button onclick="switchTab('base')" id="tab-base" class="py-4 px-1 text-sm font-medium whitespace-nowrap text-slate-500 hover:text-brand-600 transition flex items-center space-x-2">
+                <i class="fa-solid fa-table-list"></i>
+                <span>Base de Dados</span>
+            </button>
+            <button onclick="switchTab('gerenciamento')" id="tab-gerenciamento" class="py-4 px-1 text-sm font-medium whitespace-nowrap text-slate-500 hover:text-brand-600 transition flex items-center space-x-2">
+                <i class="fa-solid fa-lock text-xs text-amber-500"></i>
+                <span>Gerenciar Opções</span>
+            </button>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- Notification Toast -->
+        <div id="toast" class="hidden fixed bottom-5 right-5 z-50 bg-emerald-600 text-white px-5 py-3 rounded-xl shadow-lg flex items-center space-x-3 transition-all duration-300">
+            <i class="fa-solid fa-circle-check text-xl"></i>
+            <span id="toast-message">Ação realizada com sucesso!</span>
+        </div>
+
+        <!-- 1. TAB REGISTRO DE DADOS -->
+        <section id="section-registro" class="block">
+            <div class="max-w-2xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+                <div class="mb-6 border-b border-slate-100 pb-4">
+                    <h2 class="text-xl font-bold text-slate-900 flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-user text-brand-600"></i> Entrada de Dados
+                    </h2>
+                    <p class="text-xs text-slate-500 mt-1">Preencha o formulário para adicionar novos registros na base de dados centralizada.</p>
+                </div>
+
+                <form id="absenceForm" onsubmit="handleFormSubmit(event)" class="space-y-5">
+                    <!-- Área Dinâmica -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Área</label>
+                        <select id="formArea" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                            <option value="">Carregando áreas ordenadas...</option>
+                        </select>
+                    </div>
+
+                    <!-- Período (Mês e Ano lado a lado) -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Período (Mês e Ano)</label>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <select id="formMes" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                                <option value="">Selecione o mês</option>
+                                <option value="Janeiro">Janeiro</option>
+                                <option value="Fevereiro">Fevereiro</option>
+                                <option value="Março">Março</option>
+                                <option value="Abril">Abril</option>
+                                <option value="Maio">Maio</option>
+                                <option value="Junho">Junho</option>
+                                <option value="Julho">Julho</option>
+                                <option value="Agosto">Agosto</option>
+                                <option value="Setembro">Setembro</option>
+                                <option value="Outubro">Outubro</option>
+                                <option value="Novembro">Novembro</option>
+                                <option value="Dezembro">Dezembro</option>
+                            </select>
+
+                            <select id="formAno" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                                <!-- Preenchido dinamicamente via JS -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Motivos de Falta Dinâmico -->
+                    <div>
+                        <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Motivo da Falta</label>
+                        <select id="formMotivo" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
+                            <option value="">Carregando motivos ordenados...</option>
+                        </select>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="pt-4">
+                        <button type="submit" id="btnSalvar" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-bold py-3.5 px-6 rounded-xl shadow-md shadow-brand-500/20 hover:shadow-lg transition-all flex items-center justify-center space-x-2">
+                            <i class="fa-solid fa-cloud-arrow-up"></i>
+                            <span>Registrar Entrada na Planilha</span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </section>
+
+        <!-- 2. TAB DASHBOARD ESTATÍSTICO -->
+        <section id="section-dashboard" class="hidden space-y-6">
+
+            <!-- Filter Header for Dashboard -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="font-bold text-slate-800 text-lg">Visão Geral da Gerência</h2>
+                    <p class="text-xs text-slate-500">Estatísticas descritivas calculadas em tempo real.</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <label class="text-xs font-semibold text-slate-600">Filtrar Área:</label>
+                    <select id="filterDashArea" onchange="updateDashboard()" class="bg-slate-50 border border-slate-300 text-xs rounded-lg p-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <option value="TODAS">Todas as Áreas</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Key Metrics Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="p-3 bg-brand-50 text-brand-600 rounded-xl">
+                        <i class="fa-solid fa-users-slash text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase">Total de Faltas</p>
+                        <h3 id="metricTotal" class="text-2xl font-bold text-slate-900">0</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                        <i class="fa-solid fa-triangle-exclamation text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase">Motivo Principal</p>
+                        <h3 id="metricTopMotivo" class="text-base font-bold text-slate-900 truncate max-w-[140px]">-</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                        <i class="fa-solid fa-building-user text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase">Área mais Atingida</p>
+                        <h3 id="metricTopArea" class="text-base font-bold text-slate-900 truncate max-w-[140px]">-</h3>
+                    </div>
+                </div>
+
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex items-center space-x-4">
+                    <div class="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                        <i class="fa-solid fa-calendar-week text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-xs font-semibold text-slate-500 uppercase">Período Crítico</p>
+                        <h3 id="metricTopPeriodo" class="text-base font-bold text-slate-900 truncate max-w-[140px]">-</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Grid -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Motivos de Falta Chart -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-bar text-brand-600"></i> Distribuição por Motivos de Falta
+                    </h3>
+                    <div class="h-64 relative">
+                        <canvas id="motivoChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Áreas Chart -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm">
+                    <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-pie text-brand-600"></i> Faltas por Área Atendida
+                    </h3>
+                    <div class="h-64 relative flex justify-center">
+                        <canvas id="areaChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Monthly Trend Chart -->
+                <div class="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm lg:col-span-2">
+                    <h3 class="font-bold text-slate-800 text-sm mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-brand-600"></i> Evolução Temporal por Período
+                    </h3>
+                    <div class="h-72 relative">
+                        <canvas id="periodoChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. TAB BASE DE DADOS / TABELA -->
+        <section id="section-base" class="hidden space-y-4">
+            <!-- Table Action Header -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-wrap items-center justify-between gap-4">
+                <div class="flex items-center space-x-3">
+                    <div class="relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-3 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="renderTable()" placeholder="Buscar nos registros..." class="pl-8 pr-4 py-2 border border-slate-300 text-xs rounded-lg w-64 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                    </div>
+                    <select id="tableFilterArea" onchange="renderTable()" class="bg-slate-50 border border-slate-300 text-xs rounded-lg p-2 focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <option value="TODAS">Todas as Áreas</option>
+                    </select>
+                </div>
+
+                <div class="flex items-center space-x-2">
+                    <button onclick="exportToCSV()" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-2 px-3 rounded-lg shadow transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-excel"></i>
+                        <span>Exportar CSV/Excel</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Data Table -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="bg-slate-100/70 border-b border-slate-200 text-xs uppercase font-bold text-slate-600">
+                                <th class="py-3 px-4">Período (Mês/Ano)</th>
+                                <th class="py-3 px-4">Área</th>
+                                <th class="py-3 px-4">Motivo de Falta</th>
+                                <th class="py-3 px-4 text-center">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="dataTableBody" class="text-sm divide-y divide-slate-100">
+                            <!-- Rows inserted dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="emptyTableMessage" class="hidden text-center py-12 text-slate-400 text-xs">
+                    <i class="fa-solid fa-folder-open text-3xl mb-2 block"></i>
+                    Nenhum registro encontrado na base de dados.
+                </div>
+            </div>
+
+            <!-- Botão Discreto de Zerar Base (Rodapé) -->
+            <div class="flex justify-end pt-2">
+                <button onclick="clearAllData()" class="text-slate-400 hover:text-rose-600 text-[11px] font-normal transition flex items-center gap-1 underline underline-offset-2 opacity-60 hover:opacity-100">
+                    <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
+                    <span>Zerar base de dados (Acesso Restrito)</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- 4. TAB GERENCIAR OPÇÕES (COM BLINDAGEM ADMIN E LOGS) -->
+        <section id="section-gerenciamento" class="hidden space-y-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 mb-1 flex items-center gap-2">
+                        <i class="fa-solid fa-sliders text-brand-600"></i> Painel de Administração & Auditoria
+                    </h2>
+                    <p class="text-xs text-slate-500">Gerencie opções, exclua registros e acompanhe o histórico de logs com justificativa.</p>
+                </div>
+                <div class="flex items-center gap-2 bg-brand-50 border border-brand-100 text-brand-800 px-3 py-1.5 rounded-xl text-xs font-medium">
+                    <i class="fa-solid fa-user-check text-brand-600"></i>
+                    <span>Sessão Admin: <strong>leandro.amaral.boeira@gmail.com</strong></span>
+                </div>
+            </div>
+
+            <!-- Listas de Opções (Áreas e Motivos) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Gerenciar Áreas -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h3 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-hospital text-brand-600"></i> Áreas Cadastradas (Ordem Alfabética)
+                    </h3>
+                    
+                    <form onsubmit="addArea(event)" class="flex gap-2">
+                        <input type="text" id="newAreaName" placeholder="Nome da nova área..." required class="flex-1 bg-slate-50 border border-slate-300 text-xs rounded-xl p-3 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-4 rounded-xl shadow transition">
+                            Adicionar
+                        </button>
+                    </form>
+
+                    <div class="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-h-80 overflow-y-auto" id="areasList">
+                        <!-- Lista dinâmica de Áreas -->
+                    </div>
+                </div>
+
+                <!-- Gerenciar Motivos de Falta -->
+                <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                    <h3 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-question text-brand-600"></i> Motivos de Falta Cadastrados (Ordem Alfabética)
+                    </h3>
+                    
+                    <form onsubmit="addMotivo(event)" class="flex gap-2">
+                        <input type="text" id="newMotivoName" placeholder="Nome do novo motivo..." required class="flex-1 bg-slate-50 border border-slate-300 text-xs rounded-xl p-3 focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                        <button type="submit" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-bold px-4 rounded-xl shadow transition">
+                            Adicionar
+                        </button>
+                    </form>
+
+                    <div class="divide-y divide-slate-100 border border-slate-100 rounded-xl overflow-hidden max-h-80 overflow-y-auto" id="motivosList">
+                        <!-- Lista dinâmica de Motivos -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Gerenciamento Exclusivo de Exclusão de Registros de Faltas -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-trash-can text-rose-600"></i> Gerenciamento de Exclusão de Registros (Exclusivo Admin)
+                </h3>
+                <p class="text-xs text-slate-500">Exclua registros de faltas criados incorretamente pelos usuários. Toda exclusão exige o registro de justificativa.</p>
+                
+                <div class="overflow-x-auto border border-slate-100 rounded-xl">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100/70 border-b border-slate-200 uppercase font-bold text-slate-600">
+                                <th class="py-2.5 px-3">Período</th>
+                                <th class="py-2.5 px-3">Área</th>
+                                <th class="py-2.5 px-3">Motivo</th>
+                                <th class="py-2.5 px-3 text-center">Excluir</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminRecordsTableBody" class="divide-y divide-slate-100">
+                            <!-- Preenchido dinamicamente via JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Tabela de Logs de Auditoria -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
+                <h3 class="font-bold text-slate-800 text-base border-b border-slate-100 pb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-clock-rotate-left text-brand-600"></i> Histórico de Logs e Justificativas de Alterações
+                </h3>
+                <div class="overflow-x-auto border border-slate-100 rounded-xl">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-slate-100/70 border-b border-slate-200 uppercase font-bold text-slate-600">
+                                <th class="py-2.5 px-3">Data/Hora</th>
+                                <th class="py-2.5 px-3">Responsável</th>
+                                <th class="py-2.5 px-3">Ação</th>
+                                <th class="py-2.5 px-3">Detalhes</th>
+                                <th class="py-2.5 px-3">Justificativa / Solicitante</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditLogsTableBody" class="divide-y divide-slate-100">
+                            <!-- Logs inseridos dinamicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Modal de Autenticação Admin com Senha Oculta -->
+    <div id="modalAuth" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center space-x-3 text-brand-600">
+                <i class="fa-solid fa-shield-halved text-2xl"></i>
+                <h3 class="text-base font-bold text-slate-900">Autenticação de Administrador</h3>
+            </div>
+            <p class="text-xs text-slate-500">Informe suas credenciais para acessar o painel restrito de gerenciamento e logs.</p>
+            
+            <form onsubmit="handleAdminLogin(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">E-mail do Administrador</label>
+                    <input type="email" id="authEmail" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Senha</label>
+                    <input type="password" id="authPass" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none">
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeAuthModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition">Acessar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal de Justificativa Obrigatória de Ação Admin -->
+    <div id="modalJustificativa" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
+            <div class="flex items-center space-x-3 text-amber-600">
+                <i class="fa-solid fa-pen-clip text-2xl"></i>
+                <h3 class="text-base font-bold text-slate-900">Registro obrigatorio de Log</h3>
+            </div>
+            <p class="text-xs text-slate-500">Informe quem solicitou e a justificativa para esta ação para registro em histórico de auditoria.</p>
+            
+            <form onsubmit="confirmActionWithLog(event)" class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Solicitante / Justificativa (Obrigatório)</label>
+                    <textarea id="logJustificativaInput" required rows="3" placeholder="Ex: Solicitado por Dra. Ana devido a erro de digitação no lançamento." class="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-xs focus:ring-2 focus:ring-brand-500 focus:outline-none"></textarea>
+                </div>
+                <div class="flex justify-end space-x-2 pt-2">
+                    <button type="button" onclick="closeJustificativaModal()" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-medium transition">Cancelar</button>
+                    <button type="submit" class="px-4 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-xl text-xs font-bold transition">Confirmar & Registrar Log</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- App Logic & Firebase Integration Script -->
+    <script>
+        // Configuração do Firebase com suas chaves fornecidas
+        const firebaseConfig = {
+            apiKey: "AIzaSyCPfaeETq8UFHeawFKoTmTAJ3uA_galSAA",
+            authDomain: "controle-faltas-saude.firebaseapp.com",
+            projectId: "controle-faltas-saude",
+            storageBucket: "controle-faltas-saude.firebasestorage.app",
+            messagingSenderId: "59052061029",
+            appId: "1:59052061029:web:6f172feac8d68d9ee3b18c"
+        };
+
+        // Inicializar Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // Admin Config & Auth State
+        const ADMIN_EMAIL = "leandro.amaral.boeira@gmail.com";
+        const ADMIN_PASS = "4ndre@97APP";
+        let isAdminAuthenticated = false;
+
+        // Global State
+        let records = [];
+        let areasConfig = [];
+        let motivosConfig = [];
+        let auditLogs = [];
+
+        // Pendência de ação admin que aguarda justificativa
+        let pendingAction = null;
+
+        // Opções padrão iniciais (caso o banco esteja vazio pela primeira vez)
+        const DEFAULT_AREAS = ["Acolhimento", "Audio", "Clinica", "Fisioterapia", "Fonoaudiologia"];
+        const DEFAULT_MOTIVOS = ["Alta", "Desistência", "Doença", "Esquecimento", "Mudança de Município", "Óbito", "Sem Justificativa"];
+
+        // Chart instances
+        let motivoChartInstance = null;
+        let areaChartInstance = null;
+        let periodoChartInstance = null;
+
+        const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+        // Initialize on Load & Escutar Firebase em Tempo Real
+        window.onload = function () {
+            setupYearSelect();
+
+            // Auto preencher mês e ano atuais
+            const now = new Date();
+            document.getElementById('formMes').value = MONTHS[now.getMonth()];
+            document.getElementById('formAno').value = now.getFullYear();
+
+            // 1. Escutar Áreas do Firestore
+            db.collection("areas_cadastradas").onSnapshot(async (snapshot) => {
+                if (snapshot.empty) {
+                    await initDefaultOptions("areas_cadastradas", DEFAULT_AREAS);
+                    return;
+                }
+                areasConfig = [];
+                snapshot.forEach(doc => areasConfig.push({ id: doc.id, ...doc.data() }));
+                areasConfig.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+                updateAreasDropdowns();
+                renderManagementLists();
+            });
+
+            // 2. Escutar Motivos do Firestore
+            db.collection("motivos_cadastrados").onSnapshot(async (snapshot) => {
+                if (snapshot.empty) {
+                    await initDefaultOptions("motivos_cadastrados", DEFAULT_MOTIVOS);
+                    return;
+                }
+                motivosConfig = [];
+                snapshot.forEach(doc => motivosConfig.push({ id: doc.id, ...doc.data() }));
+                motivosConfig.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR', { sensitivity: 'base' }));
+                updateMotivosDropdowns();
+                renderManagementLists();
+            });
+
+            // 3. Escutar Registros de Faltas do Firestore
+            db.collection("registros")
+                .orderBy("criadoEm", "desc")
+                .onSnapshot((snapshot) => {
+                    records = [];
+                    snapshot.forEach((doc) => {
+                        records.push({
+                            id: doc.id,
+                            ...doc.data()
+                        });
+                    });
+                    
+                    renderTable();
+                    renderAdminRecordsTable();
+                    if (!document.getElementById('section-dashboard').classList.contains('hidden')) {
+                        updateDashboard();
+                    }
+                }, (error) => {
+                    console.error("Erro ao escutar banco de dados:", error);
+                });
+
+            // 4. Escutar Logs de Auditoria em Tempo Real
+            db.collection("audit_logs")
+                .orderBy("dataHora", "desc")
+                .onSnapshot((snapshot) => {
+                    auditLogs = [];
+                    snapshot.forEach((doc) => {
+                        auditLogs.push({ id: doc.id, ...doc.data() });
+                    });
+                    renderAuditLogsTable();
+                }, (err) => console.error("Erro ao escutar logs:", err));
+
+            initCharts();
+        };
+
+        // Modal de Login Admin seguro (Sem prompt simples de texto claro)
+        function openAuthModal() {
+            document.getElementById('authEmail').value = '';
+            document.getElementById('authPass').value = '';
+            document.getElementById('modalAuth').classList.remove('hidden');
+        }
+
+        function closeAuthModal() {
+            document.getElementById('modalAuth').classList.add('hidden');
+        }
+
+        function handleAdminLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('authEmail').value.trim();
+            const pass = document.getElementById('authPass').value;
+
+            if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && pass === ADMIN_PASS) {
+                isAdminAuthenticated = true;
+                closeAuthModal();
+                showToast("Acesso administrativo liberado!");
+                switchTab('gerenciamento');
+            } else {
+                alert("Acesso Negado: E-mail ou senha de administrador incorretos.");
+            }
+        }
+
+        // Switch Tabs com Blindagem da aba Gerenciamento via Modal Seguro
+        function switchTab(tabName) {
+            if (tabName === 'gerenciamento' && !isAdminAuthenticated) {
+                openAuthModal();
+                return;
+            }
+
+            ['registro', 'dashboard', 'base', 'gerenciamento'].forEach(tab => {
+                document.getElementById(`section-${tab}`).classList.add('hidden');
+                document.getElementById(`tab-${tab}`).classList.remove('active-tab');
+                document.getElementById(`tab-${tab}`).classList.add('text-slate-500');
+            });
+
+            document.getElementById(`section-${tabName}`).classList.remove('hidden');
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.add('active-tab');
+            activeBtn.classList.remove('text-slate-500');
+
+            if (tabName === 'dashboard') {
+                updateDashboard();
+            } else if (tabName === 'base') {
+                renderTable();
+            } else if (tabName === 'gerenciamento') {
+                renderAdminRecordsTable();
+                renderAuditLogsTable();
+            }
+        }
+
+        // Sistema de Justificativa e Gravação de Log de Auditoria
+        function promptActionWithLog(type, details, executeCallback) {
+            pendingAction = { type, details, executeCallback };
+            document.getElementById('logJustificativaInput').value = '';
+            document.getElementById('modalJustificativa').classList.remove('hidden');
+        }
+
+        function closeJustificativaModal() {
+            pendingAction = null;
+            document.getElementById('modalJustificativa').classList.add('hidden');
+        }
+
+        async function confirmActionWithLog(e) {
+            e.preventDefault();
+            const justificativa = document.getElementById('logJustificativaInput').value.trim();
+            if (!justificativa || !pendingAction) return;
+
+            const actionToRun = pendingAction;
+            closeJustificativaModal();
+
+            try {
+                // Registrar log no Firestore
+                await db.collection("audit_logs").add({
+                    responsavel: ADMIN_EMAIL,
+                    acao: actionToRun.type,
+                    detalhes: actionToRun.details,
+                    justificativa: justificativa,
+                    dataHora: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                // Executar callback da operação
+                await actionToRun.executeCallback();
+            } catch (err) {
+                console.error("Erro ao registrar log e executar ação:", err);
+                alert("Erro ao processar a operação.");
+            }
+        }
+
+        // Popula o banco com as opções padrão se for o 1º acesso
+        async function initDefaultOptions(collectionName, itemsArray) {
+            const batch = db.batch();
+            itemsArray.forEach(item => {
+                const docRef = db.collection(collectionName).doc();
+                batch.set(docRef, { nome: item });
+            });
+            await batch.commit();
+        }
+
+        // Popula o select do ano dinamicamente
+        function setupYearSelect() {
+            const selectAno = document.getElementById('formAno');
+            const currentYear = new Date().getFullYear();
+            selectAno.innerHTML = '';
+            
+            for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+                const opt = document.createElement('option');
+                opt.value = y;
+                opt.textContent = y;
+                selectAno.appendChild(opt);
+            }
+        }
+
+        // Atualiza os <select> de Áreas
+        function updateAreasDropdowns() {
+            const formAreaSelect = document.getElementById('formArea');
+            const dashFilterSelect = document.getElementById('filterDashArea');
+            const tableFilterSelect = document.getElementById('tableFilterArea');
+
+            const currentFormValue = formAreaSelect.value;
+            const currentDashValue = dashFilterSelect.value;
+            const currentTableValue = tableFilterSelect.value;
+
+            formAreaSelect.innerHTML = '<option value="">Selecione a área</option>';
+            dashFilterSelect.innerHTML = '<option value="TODAS">Todas as Áreas</option>';
+            tableFilterSelect.innerHTML = '<option value="TODAS">Todas as Áreas</option>';
+
+            areasConfig.forEach(item => {
+                formAreaSelect.innerHTML += `<option value="${item.nome}">${item.nome}</option>`;
+                dashFilterSelect.innerHTML += `<option value="${item.nome}">${item.nome}</option>`;
+                tableFilterSelect.innerHTML += `<option value="${item.nome}">${item.nome}</option>`;
+            });
+
+            formAreaSelect.value = currentFormValue;
+            dashFilterSelect.value = currentDashValue || "TODAS";
+            tableFilterSelect.value = currentTableValue || "TODAS";
+        }
+
+        // Atualiza os <select> de Motivos
+        function updateMotivosDropdowns() {
+            const formMotivoSelect = document.getElementById('formMotivo');
+            const currentFormValue = formMotivoSelect.value;
+
+            formMotivoSelect.innerHTML = '<option value="">Selecione o motivo</option>';
+
+            motivosConfig.forEach(item => {
+                formMotivoSelect.innerHTML += `<option value="${item.nome}">${item.nome}</option>`;
+            });
+
+            formMotivoSelect.value = currentFormValue;
+        }
+
+        // Renderiza as listas na aba de Gerenciamento
+        function renderManagementLists() {
+            const areasList = document.getElementById('areasList');
+            const motivosList = document.getElementById('motivosList');
+
+            if (areasList) {
+                areasList.innerHTML = areasConfig.map(a => `
+                    <div class="p-3 bg-white flex justify-between items-center text-xs">
+                        <span class="font-medium text-slate-800">${a.nome}</span>
+                        <button onclick="removeConfig('areas_cadastradas', '${a.id}', '${a.nome}')" class="text-rose-500 hover:text-rose-700 p-1">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            if (motivosList) {
+                motivosList.innerHTML = motivosConfig.map(m => `
+                    <div class="p-3 bg-white flex justify-between items-center text-xs">
+                        <span class="font-medium text-slate-800">${m.nome}</span>
+                        <button onclick="removeConfig('motivos_cadastrados', '${m.id}', '${m.nome}')" class="text-rose-500 hover:text-rose-700 p-1">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Adicionar nova Área
+        async function addArea(e) {
+            e.preventDefault();
+            const input = document.getElementById('newAreaName');
+            const val = input.value.trim();
+            if (!val) return;
+
+            promptActionWithLog('Criação de Área', `Nova área cadastrada: "${val}"`, async () => {
+                await db.collection("areas_cadastradas").add({ nome: val });
+                input.value = '';
+                showToast("Nova área cadastrada na nuvem!");
+            });
+        }
+
+        // Adicionar novo Motivo
+        async function addMotivo(e) {
+            e.preventDefault();
+            const input = document.getElementById('newMotivoName');
+            const val = input.value.trim();
+            if (!val) return;
+
+            promptActionWithLog('Criação de Motivo', `Novo motivo cadastrado: "${val}"`, async () => {
+                await db.collection("motivos_cadastrados").add({ nome: val });
+                input.value = '';
+                showToast("Novo motivo cadastrado na nuvem!");
+            });
+        }
+
+        // Excluir Área ou Motivo com Log
+        function removeConfig(collectionName, id, name) {
+            const label = collectionName === 'areas_cadastradas' ? 'Área' : 'Motivo';
+            promptActionWithLog(`Exclusão de ${label}`, `Remoção da opção "${name}"`, async () => {
+                await db.collection(collectionName).doc(id).delete();
+                showToast("Opção removida da nuvem.");
+            });
+        }
+
+        // Retorna a string do período formatada (Mês/Ano)
+        function formatPeriodo(record) {
+            if (record.mes && record.ano) return `${record.mes}/${record.ano}`;
+            if (record.periodo) return record.periodo;
+            return '-';
+        }
+
+        // Handle Form Submission
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const btn = document.getElementById('btnSalvar');
+            btn.disabled = true;
+            btn.innerHTML = `<i class="fa-solid fa-spinner animate-spin"></i> <span>Salvando na Nuvem...</span>`;
+
+            const mes = document.getElementById('formMes').value;
+            const ano = document.getElementById('formAno').value;
+
+            try {
+                await db.collection("registros").add({
+                    mes: mes,
+                    ano: ano,
+                    periodo: `${mes}/${ano}`,
+                    area: document.getElementById('formArea').value,
+                    motivo: document.getElementById('formMotivo').value,
+                    criadoEm: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                document.getElementById('formArea').value = '';
+                document.getElementById('formMotivo').value = '';
+
+                showToast("Entrada gravada com sucesso na planilha!");
+            } catch (err) {
+                console.error("Erro ao salvar:", err);
+                alert("Ocorreu um erro ao salvar o registro na nuvem.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = `<i class="fa-solid fa-cloud-arrow-up"></i> <span>Registrar Entrada na Planilha</span>`;
+            }
+        }
+
+        // Show Toast Notification
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-message').innerText = msg;
+            toast.classList.remove('hidden');
+            setTimeout(() => {
+                toast.classList.add('hidden');
+            }, 3000);
+        }
+
+        // Render Database Table para Usuários (SEM Opção de Deletar)
+        function renderTable() {
+            const tbody = document.getElementById('dataTableBody');
+            const search = document.getElementById('searchInput').value.toLowerCase();
+            const filterArea = document.getElementById('tableFilterArea').value;
+
+            tbody.innerHTML = '';
+
+            const filtered = records.filter(r => {
+                const pText = formatPeriodo(r);
+                const matchesArea = filterArea === 'TODAS' || r.area === filterArea;
+                const matchesSearch = pText.toLowerCase().includes(search) || 
+                                      (r.area || '').toLowerCase().includes(search) || 
+                                      (r.motivo || '').toLowerCase().includes(search);
+                return matchesArea && matchesSearch;
+            });
+
+            if (filtered.length === 0) {
+                document.getElementById('emptyTableMessage').classList.remove('hidden');
+            } else {
+                document.getElementById('emptyTableMessage').classList.add('hidden');
+                filtered.forEach(r => {
+                    const tr = document.createElement('tr');
+                    tr.className = "hover:bg-slate-50/80 transition text-slate-700";
+
+                    tr.innerHTML = `
+                        <td class="py-3 px-4 font-medium text-slate-900">${formatPeriodo(r)}</td>
+                        <td class="py-3 px-4"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-sky-100 text-sky-800">${r.area}</span></td>
+                        <td class="py-3 px-4"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-800">${r.motivo}</span></td>
+                        <td class="py-3 px-4 text-center">
+                            <span class="text-xs text-slate-400 font-normal italic">Consolidado</span>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        }
+
+        // Render Tabela da Aba Admin com opção Exclusiva de Exclusão
+        function renderAdminRecordsTable() {
+            const tbody = document.getElementById('adminRecordsTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            if (records.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Nenhum registro para exibir.</td></tr>`;
+                return;
+            }
+
+            records.forEach(r => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-slate-700";
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 font-medium text-slate-900">${formatPeriodo(r)}</td>
+                    <td class="py-2.5 px-3">${r.area}</td>
+                    <td class="py-2.5 px-3">${r.motivo}</td>
+                    <td class="py-2.5 px-3 text-center">
+                        <button onclick="adminDeleteRecord('${r.id}', '${formatPeriodo(r)}', '${r.area}', '${r.motivo}')" class="text-rose-600 hover:text-rose-800 p-1 font-bold text-xs" title="Excluir Registro">
+                            <i class="fa-regular fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Exclusão de Registro Exclusivo do Admin com Registro de Log Obrigatorio
+        function adminDeleteRecord(docId, periodo, area, motivo) {
+            promptActionWithLog('Exclusão de Registro de Falta', `Registro apagado: [Período: ${periodo} | Área: ${area} | Motivo: ${motivo}]`, async () => {
+                await db.collection("registros").doc(docId).delete();
+                showToast("Registro removido pelo administrador.");
+            });
+        }
+
+        // Render Tabela de Logs de Auditoria
+        function renderAuditLogsTable() {
+            const tbody = document.getElementById('auditLogsTableBody');
+            if (!tbody) return;
+
+            tbody.innerHTML = '';
+
+            if (auditLogs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-400">Nenhum log registrado até o momento.</td></tr>`;
+                return;
+            }
+
+            auditLogs.forEach(log => {
+                let dataFormatada = '-';
+                if (log.dataHora && log.dataHora.toDate) {
+                    dataFormatada = log.dataHora.toDate().toLocaleString('pt-BR');
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition text-slate-700";
+                tr.innerHTML = `
+                    <td class="py-2.5 px-3 whitespace-nowrap text-slate-500">${dataFormatada}</td>
+                    <td class="py-2.5 px-3 font-semibold text-slate-800">${log.responsavel || '-'}</td>
+                    <td class="py-2.5 px-3"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800">${log.acao || '-'}</span></td>
+                    <td class="py-2.5 px-3 text-slate-700">${log.detalhes || '-'}</td>
+                    <td class="py-2.5 px-3 font-medium text-brand-700">${log.justificativa || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // Clear All Data com Log
+        async function clearAllData() {
+            if (records.length === 0) {
+                alert("A base de dados já está vazia!");
+                return;
+            }
+
+            if (!isAdminAuthenticated) {
+                openAuthModal();
+                return;
+            }
+
+            promptActionWithLog('ZERAR BASE DE DADOS COMPLETA', `Exclusão de todos os ${records.length} registros da base centralizada.`, async () => {
+                const snapshot = await db.collection("registros").get();
+                const batch = db.batch();
+                snapshot.docs.forEach((doc) => {
+                    batch.delete(doc.ref);
+                });
+                await batch.commit();
+                showToast("Base de dados zerada com sucesso pelo administrador.");
+            });
+        }
+
+        // Export Table Data to CSV
+        function exportToCSV() {
+            if (records.length === 0) {
+                alert("Não há dados para exportar!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += "Mês;Ano;Período Completo;Área;Motivo de Falta\n";
+
+            records.forEach(r => {
+                const mesVal = r.mes || (r.periodo ? r.periodo.split('/')[0] : '');
+                const anoVal = r.ano || (r.periodo ? r.periodo.split('/')[1] : '');
+                const pText = formatPeriodo(r);
+                csvContent += `"${mesVal}";"${anoVal}";"${pText}";"${r.area}";"${r.motivo}"\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `controle_de_faltas_fonoaudiologia_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Dashboard & Analytics Calculations
+        function initCharts() {
+            const ctxMotivo = document.getElementById('motivoChart').getContext('2d');
+            const ctxArea = document.getElementById('areaChart').getContext('2d');
+            const ctxPeriodo = document.getElementById('periodoChart').getContext('2d');
+
+            motivoChartInstance = new Chart(ctxMotivo, {
+                type: 'bar',
+                data: { labels: [], datasets: [{ label: 'Faltas por Motivo', data: [], backgroundColor: '#0284c7' }] },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            areaChartInstance = new Chart(ctxArea, {
+                type: 'doughnut',
+                data: { labels: [], datasets: [{ data: [], backgroundColor: ['#0284c7', '#0d9488', '#f59e0b', '#8b5cf6', '#ec4899', '#6366f1', '#14b8a6'] }] },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+
+            periodoChartInstance = new Chart(ctxPeriodo, {
+                type: 'line',
+                data: { 
+                    labels: [], 
+                    datasets: [{ 
+                        label: 'Total de Faltas no Período', 
+                        data: [], 
+                        borderColor: '#0284c7', 
+                        backgroundColor: 'rgba(2, 132, 199, 0.1)', 
+                        fill: true, 
+                        tension: 0.3 
+                    }] 
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        function updateDashboard() {
+            if (!motivoChartInstance) return;
+
+            const selectedArea = document.getElementById('filterDashArea').value;
+            const filteredData = selectedArea === 'TODAS' ? records : records.filter(r => r.area === selectedArea);
+
+            // Update Metric Cards
+            document.getElementById('metricTotal').innerText = filteredData.length;
+
+            // Count occurrences
+            const motivoCounts = {};
+            const areaCounts = {};
+            const periodoCounts = {};
+
+            filteredData.forEach(r => {
+                const pKey = formatPeriodo(r);
+                if (r.motivo) motivoCounts[r.motivo] = (motivoCounts[r.motivo] || 0) + 1;
+                if (r.area) areaCounts[r.area] = (areaCounts[r.area] || 0) + 1;
+                if (pKey !== '-') periodoCounts[pKey] = (periodoCounts[pKey] || 0) + 1;
+            });
+
+            // Get Top Occurrences
+            const getTop = (obj) => Object.keys(obj).reduce((a, b) => obj[a] > obj[b] ? a : b, '-');
+            document.getElementById('metricTopMotivo').innerText = Object.keys(motivoCounts).length ? getTop(motivoCounts) : '-';
+            document.getElementById('metricTopArea').innerText = Object.keys(areaCounts).length ? getTop(areaCounts) : '-';
+            document.getElementById('metricTopPeriodo').innerText = Object.keys(periodoCounts).length ? getTop(periodoCounts) : '-';
+
+            // Chart 1: Motivos (Ordenados)
+            const sortedMotivos = Object.keys(motivoCounts).sort((a,b) => a.localeCompare(b, 'pt-BR'));
+            motivoChartInstance.data.labels = sortedMotivos;
+            motivoChartInstance.data.datasets[0].data = sortedMotivos.map(k => motivoCounts[k]);
+            motivoChartInstance.update();
+
+            // Chart 2: Areas (Ordenadas)
+            const sortedAreas = Object.keys(areaCounts).sort((a,b) => a.localeCompare(b, 'pt-BR'));
+            areaChartInstance.data.labels = sortedAreas;
+            areaChartInstance.data.datasets[0].data = sortedAreas.map(k => areaCounts[k]);
+            areaChartInstance.update();
+
+            // Chart 3: Periodo Trend (Mês/Ano)
+            const sortedPeriodKeys = Object.keys(periodoCounts);
+            periodoChartInstance.data.labels = sortedPeriodKeys;
+            periodoChartInstance.data.datasets[0].data = sortedPeriodKeys.map(k => periodoCounts[k]);
+            periodoChartInstance.update();
+        }
+    </script>
+</body>
+</html>
