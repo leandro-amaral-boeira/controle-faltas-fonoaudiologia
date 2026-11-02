@@ -135,7 +135,7 @@
                             </select>
 
                             <select id="formAno" required class="w-full bg-slate-50 border border-slate-300 rounded-xl p-3 text-sm focus:bg-white focus:ring-2 focus:ring-brand-500 focus:outline-none transition">
-                                <!-- Preenchido dinamicamente via JS -->
+                                <!-- Preenchido dinamicamente via JS (2026-2035) -->
                             </select>
                         </div>
                     </div>
@@ -297,14 +297,6 @@
                     Nenhum registro encontrado na base de dados.
                 </div>
             </div>
-
-            <!-- Botão Discreto de Zerar Base (Rodapé) -->
-            <div class="flex justify-end pt-2">
-                <button onclick="clearAllData()" class="text-slate-400 hover:text-rose-600 text-[11px] font-normal transition flex items-center gap-1 underline underline-offset-2 opacity-60 hover:opacity-100">
-                    <i class="fa-solid fa-triangle-exclamation text-[10px]"></i>
-                    <span>Zerar base de dados (Acesso Restrito)</span>
-                </button>
-            </div>
         </section>
 
         <!-- 4. TAB GERENCIAR OPÇÕES (COM BLINDAGEM ADMIN E LOGS) -->
@@ -460,7 +452,7 @@
 
     <!-- App Logic & Firebase Integration Script -->
     <script>
-        // Configuração do Firebase com suas chaves fornecidas
+        // Configuração do Firebase
         const firebaseConfig = {
             apiKey: "AIzaSyCPfaeETq8UFHeawFKoTmTAJ3uA_galSAA",
             authDomain: "controle-faltas-saude.firebaseapp.com",
@@ -506,7 +498,7 @@
             // Auto preencher mês e ano atuais
             const now = new Date();
             document.getElementById('formMes').value = MONTHS[now.getMonth()];
-            document.getElementById('formAno').value = now.getFullYear();
+            document.getElementById('formAno').value = Math.max(2026, now.getFullYear());
 
             // 1. Escutar Áreas do Firestore
             db.collection("areas_cadastradas").onSnapshot(async (snapshot) => {
@@ -569,7 +561,7 @@
             initCharts();
         };
 
-        // Modal de Login Admin seguro (Sem prompt simples de texto claro)
+        // Modal de Login Admin seguro
         function openAuthModal() {
             document.getElementById('authEmail').value = '';
             document.getElementById('authPass').value = '';
@@ -671,13 +663,12 @@
             await batch.commit();
         }
 
-        // Popula o select do ano dinamicamente
+        // Popula o select do ano dinamicamente de 2026 a 2035
         function setupYearSelect() {
             const selectAno = document.getElementById('formAno');
-            const currentYear = new Date().getFullYear();
             selectAno.innerHTML = '';
             
-            for (let y = currentYear - 2; y <= currentYear + 2; y++) {
+            for (let y = 2026; y <= 2035; y++) {
                 const opt = document.createElement('option');
                 opt.value = y;
                 opt.textContent = y;
@@ -943,29 +934,6 @@
                     <td class="py-2.5 px-3 font-medium text-brand-700">${log.justificativa || '-'}</td>
                 `;
                 tbody.appendChild(tr);
-            });
-        }
-
-        // Clear All Data com Log
-        async function clearAllData() {
-            if (records.length === 0) {
-                alert("A base de dados já está vazia!");
-                return;
-            }
-
-            if (!isAdminAuthenticated) {
-                openAuthModal();
-                return;
-            }
-
-            promptActionWithLog('ZERAR BASE DE DADOS COMPLETA', `Exclusão de todos os ${records.length} registros da base centralizada.`, async () => {
-                const snapshot = await db.collection("registros").get();
-                const batch = db.batch();
-                snapshot.docs.forEach((doc) => {
-                    batch.delete(doc.ref);
-                });
-                await batch.commit();
-                showToast("Base de dados zerada com sucesso pelo administrador.");
             });
         }
 
